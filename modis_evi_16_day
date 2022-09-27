@@ -1,0 +1,55 @@
+var dataset = ee.ImageCollection("MODIS/MCD43A4_006_EVI")
+                  .filterDate('2015-01-01', '2015-12-31');
+
+var colorized = dataset.select('EVI');
+print(colorized);
+var colorizedVis = {
+  min: 0.0,
+  max: 1.0,
+  palette: [
+    'FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901',
+    '66A000', '529400', '3E8601', '207401', '056201', '004C00', '023B01',
+    '012E01', '011D01', '011301'
+  ],
+};
+
+var rwanda_geom = ee.Geometry.Rectangle([28.8333333329999988,-2.8333333329999997, 30.9166666670000012,-1.0416666670000001]);
+
+// Map.centerObject(rwanda_geom);
+// Map.addLayer(rwanda_geom, {color: 'FF0000'}, 'rwanda_geom');
+// Map.addLayer(
+//     colorized, colorizedVis,
+//     'EVI');
+
+var months = ee.List.sequence(1, 12);
+var years = ee.List.sequence(2015, 2015);
+
+var byMonthYear = ee.ImageCollection.fromImages(
+  years.map(function(y) {
+    return months.map(function (m) {
+      return colorized
+        .filter(ee.Filter.calendarRange(y, y, 'year'))
+        .filter(ee.Filter.calendarRange(m, m, 'month'))
+        .mean()
+        .set('month', m).set('year', y);
+  });
+}).flatten());
+
+var myScale = byMonthYear.first().projection().nominalScale();
+print(myScale);
+print(byMonthYear);
+
+
+             
+//Export a cloud-optimized GeoTIFF.
+
+Export.image.toDrive({
+  image: byMonthYear.toBands(),
+  description: 'modis_evi_2015',
+  scale: 500,
+  region: rwanda_geom,
+  fileFormat: 'GeoTIFF',
+  formatOptions: {
+    cloudOptimized: true
+  }
+});

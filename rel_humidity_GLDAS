@@ -1,0 +1,63 @@
+function relativeHumidity(image){
+  var rel_humidity = image.expression(
+    '0.263 * p * q * (exp(17.67 * (T - T0) / (T - 29.65))) ** -1', {
+    T: image.select('Tair_f_inst'),
+    T0: 273.16,
+    p: image.select('Psurf_f_inst'),
+    q: image.select('Qair_f_inst')
+    }
+  ).float()
+  return rel_humidity
+}
+
+var image = ee.ImageCollection('NASA/GLDAS/V021/NOAH/G025/T3H')
+    .filterDate(ee.Date('2015-01-01'), ee.Date('2015-12-31'))
+
+var months = ee.List.sequence(1, 12);
+var years = ee.List.sequence(2015, 2015);
+
+var byMonthYear = ee.ImageCollection.fromImages(
+  years.map(function(y) {
+    return months.map(function (m) {
+      return image
+        .filter(ee.Filter.calendarRange(y, y, 'year'))
+        .filter(ee.Filter.calendarRange(m, m, 'month'))
+        .map(relativeHumidity)
+        .mean()
+        .set('month', m).set('year', y);
+  });
+}).flatten());
+var myScale = byMonthYear.first().projection().nominalScale()
+print(myScale)
+print(byMonthYear)
+
+
+             
+//Export a cloud-optimized GeoTIFF.
+
+// Export.image.toDrive({
+//   image: byMonthYear.toBands(),
+//   description: 'GLDAS_rel_hum_monthly_mean',
+//   scale: myScale.getInfo(),
+//   region: rwanda_geom,
+//   fileFormat: 'GeoTIFF',
+//   formatOptions: {
+//     cloudOptimized: true
+//   }
+// });
+
+
+
+
+// https://earthscience.stackexchange.com/questions/2360/how-do-i-convert-specific-humidity-to-relative-humidity/2361#2361
+
+var rwanda_geom = /* color: #ffffff */ee.Geometry.Polygon(
+        [[[28.833333333, -1.041666667],
+          [28.833333333, -2.8333333329999997],
+          [30.916666667, -2.8333333329999997],
+          [30.916666667, -1.041666667]]]);
+
+
+Map.setCenter(29.981016,-2.140189, 9);
+Map.addLayer(byMonthYear, {min: 0, max: 100}, 'relativeHumidity')
+Map.addLayer(rwanda_geom)
